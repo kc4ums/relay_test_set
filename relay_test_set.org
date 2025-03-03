@@ -1,23 +1,7 @@
-Welcome to GNU Emacs, one component of the GNU/Linux operating system.
 
-Get help	   C-h  (Hold down CTRL and press h)
-Emacs manual	   C-h r	Browse manuals	   C-h i
-Emacs tutorial	   C-h t	Undo changes	   C-x u
-Buy manuals	   C-h RET	Exit Emacs	   C-x C-c
-Activate menubar   M-`
-(‘C-’ means use the CTRL key.  ‘M-’ means use the Meta (or Alt) key.
-If you have no Meta key, you may instead type ESC followed by the character.)
-Useful tasks:
-Visit New File			Open Home Directory
-Customize Startup		Open *scratch* buffer
+*** TODO Program test single AD9833
+*** TODO Test single AD9833 with power amp for function
+*** TODO Program test two AD9833 with syncronization and 120 deg phase shift
+*** TODO Test two AD9833 with power amp for function
+*** TODO Test X9C104 Digital Potentiometer with controller and AD9833 & Amp
 
-GNU Emacs 29.4 (build 1, x86_64-pc-linux-gnu) of 2024-08-12
-Copyright (C) 2024 Free Software Foundation, Inc.
-
-GNU Emacs comes with ABSOLUTELY NO WARRANTY; type C-h C-w for full details.
-Emacs is Free Software--Free as in Freedom--so you can redistribute copies
-of Emacs and modify it; type C-h C-c to see the conditions.
-Type C-h C-o for information on getting the latest version.
-
-If an Emacs session crashed recently, type M-x recover-session RET
-to recover the files you were editing.
