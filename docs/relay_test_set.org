@@ -1,0 +1,9 @@
+
+*** DONE Replace AD9833 SPI approach with Pico PWM 3-phase generation
+*** TODO Bench test Pico output: probe pins 0/2/4, confirm 60Hz sine with 120° phase shifts
+*** TODO Build and test RC low-pass filter stages (1kΩ + 100nF × 2 poles per channel)
+*** TODO Build MOSFET amplifier prototype (one channel: IRF540N + IRF9540N + LM358 bias)
+*** TODO Bench test amplifier into 1Ω 50W resistor, confirm 10A peak output
+*** TODO Replicate amplifier for phases B and C
+*** TODO Integrate X9C104 for amplitude (fault level) control
+*** TODO Full system test: connect to relay under test, verify trip characteristic
