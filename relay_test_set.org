@@ -1,7 +1,0 @@
-
-*** TODO Program test single AD9833
-*** TODO Test single AD9833 with power amp for function
-*** TODO Program test two AD9833 with syncronization and 120 deg phase shift
-*** TODO Test two AD9833 with power amp for function
-*** TODO Test X9C104 Digital Potentiometer with controller and AD9833 & Amp
-
