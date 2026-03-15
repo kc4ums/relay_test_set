@@ -8,24 +8,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Firmware Deployment
 
-Runs on BeagleBone Black (Debian Trixie, console). Requires `Adafruit_BBIO` (installed into `/opt/relay_venv`) and `bb-cape-overlays` (built from source — see below).
+Runs on BeagleBone Black (Debian 12 Bookworm, v5.10-ti kernel, console). Requires `Adafruit_BBIO` (installed into `/opt/relay_venv`) and `bb-cape-overlays`.
 
 1. Copy `firmware/beaglebone_3phase/` to the BBB (e.g. via `scp`)
 2. Run `sudo bash setup.sh` — installs deps and configures PWM pins
 3. Run the generator: `sudo chrt -f 50 /opt/relay_venv/bin/python3 beaglebone_3phase.py`
 4. Ctrl-C for clean shutdown (outputs return to 50% midpoint)
 
-### First-time BBB setup notes (Debian Trixie)
+### First-time BBB setup notes
 
-- `bb-cape-overlays` is not in the Trixie apt repo — must build from source:
-  ```bash
-  sudo apt install build-essential device-tree-compiler git
-  git clone https://github.com/beagleboard/bb.org-overlays
-  cd bb.org-overlays && make && sudo make install
-  ```
-- `Adafruit_BBIO` is installed into a venv at `/opt/relay_venv` (PEP 668 blocks system-wide pip on Trixie)
-- BeagleBone apt repo is at `https://debian.beagleboard.org/debian-trixie-armhf/`
-- `.gitattributes` enforces LF line endings for `.sh`/`.py` — no need to run `sed -i 's/\r//'` after scp
+- **OS image:** BeagleBone Black Debian 12.12 2025-10-29 IoT (v5.10-ti) — use this exact image
+  - Download from https://www.beagleboard.org/distros
+  - Flash with Balena Etcher; hold S2 button on first boot to boot from SD
+  - Use v5.10-ti kernel — newer mainline kernels (6.x) break cape universal and PWM
+- `bb-cape-overlays` is available via apt on Bookworm with the BeagleBone repo
+- `Adafruit_BBIO` installs fine on Python 3.9 (shipped with Bookworm/v5.10-ti image)
+- `Adafruit_BBIO` is installed into a venv at `/opt/relay_venv` (PEP 668)
+- `.gitattributes` enforces LF line endings for `.sh`/`.py` — no CRLF issues after scp
+- Enable cape universal in `/boot/uEnv.txt`: uncomment `enable_uboot_cape_universal=1`
 
 `SCHED_FIFO` priority 50 (`chrt -f 50`) is required for acceptable timing jitter on a stock Debian kernel.
 
