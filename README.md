@@ -28,7 +28,7 @@ Run Debian from a microSD card — no eMMC flashing required.
 
 1. Download **BeagleBone Black Debian 12.12 2025-10-29 IoT (v5.10-ti)** from https://www.beagleboard.org/distros
    — use the v5.10-ti kernel, NOT 6.x (6.x breaks PWM/cape support)
-2. Write to a 4GB+ microSD card using **Balena Etcher**
+2. Write to a 4GB+ microSD card using **Rufus** (DD mode) or Balena Etcher
 3. Power off the BBB, insert the card
 4. **Hold the S2 button** (near the microSD slot) while applying power; release after ~5 seconds
 5. SSH in: `ssh debian@192.168.7.2` — password `temppwd`
