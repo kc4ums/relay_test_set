@@ -8,12 +8,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Firmware Deployment
 
-Runs on BeagleBone Black (Debian Linux, console). Requires `Adafruit_BBIO` and `bb-cape-overlays`.
+Runs on BeagleBone Black (Debian Trixie, console). Requires `Adafruit_BBIO` (installed into `/opt/relay_venv`) and `bb-cape-overlays` (built from source — see below).
 
 1. Copy `firmware/beaglebone_3phase/` to the BBB (e.g. via `scp`)
 2. Run `sudo bash setup.sh` — installs deps and configures PWM pins
-3. Run the generator: `sudo chrt -f 50 python3 beaglebone_3phase.py`
+3. Run the generator: `sudo chrt -f 50 /opt/relay_venv/bin/python3 beaglebone_3phase.py`
 4. Ctrl-C for clean shutdown (outputs return to 50% midpoint)
+
+### First-time BBB setup notes (Debian Trixie)
+
+- `bb-cape-overlays` is not in the Trixie apt repo — must build from source:
+  ```bash
+  sudo apt install build-essential device-tree-compiler git
+  git clone https://github.com/beagleboard/bb.org-overlays
+  cd bb.org-overlays && make && sudo make install
+  ```
+- `Adafruit_BBIO` is installed into a venv at `/opt/relay_venv` (PEP 668 blocks system-wide pip on Trixie)
+- BeagleBone apt repo is at `https://debian.beagleboard.org/debian-trixie-armhf/`
+- `.gitattributes` enforces LF line endings for `.sh`/`.py` — no need to run `sed -i 's/\r//'` after scp
 
 `SCHED_FIFO` priority 50 (`chrt -f 50`) is required for acceptable timing jitter on a stock Debian kernel.
 
@@ -37,7 +49,6 @@ Power rails: +24V (Meanwell LRS-350-24) for MOSFET drains; +12V (7812 from 24V) 
 | `hardware/schematic.txt` | Full ASCII schematic (one channel + power) |
 | `hardware/amp_circuit.md` | MOSFET amplifier design details |
 | `hardware/bom.md` | Bill of materials |
-| `docs/relay_test_set.org` | TODO/progress tracker (org-mode) |
 | `Kicad/Kicad.kicad_sch` | KiCad schematic |
 
 ## Firmware Notes

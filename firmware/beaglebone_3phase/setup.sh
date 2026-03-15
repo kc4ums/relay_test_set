@@ -16,10 +16,13 @@ if ! command -v config-pin &>/dev/null; then
     apt-get install -y python3-pip python3-dev bb-cape-overlays
 fi
 
-# Install Adafruit_BBIO if not already present
-if ! python3 -c "import Adafruit_BBIO" &>/dev/null 2>&1; then
-    echo "Installing Adafruit_BBIO..."
-    pip3 install Adafruit_BBIO
+# Install Adafruit_BBIO into a venv at /opt/relay_venv
+VENV=/opt/relay_venv
+if ! "$VENV/bin/python3" -c "import Adafruit_BBIO" &>/dev/null 2>&1; then
+    echo "Installing Adafruit_BBIO into $VENV..."
+    apt-get install -y python3-full python3-venv
+    python3 -m venv "$VENV"
+    "$VENV/bin/pip" install Adafruit_BBIO
 else
     echo "Adafruit_BBIO already installed."
 fi
@@ -49,4 +52,4 @@ echo "Then add a udev rule or rc.local entry to re-run 'config-pin' at boot,"
 echo "or use the systemd service approach described in the Adafruit_BBIO docs."
 echo ""
 echo "Run the signal generator with:"
-echo "  sudo chrt -f 50 python3 beaglebone_3phase.py"
+echo "  sudo chrt -f 50 /opt/relay_venv/bin/python3 beaglebone_3phase.py"
