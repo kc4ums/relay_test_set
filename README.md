@@ -8,37 +8,71 @@ overcurrent relay testing.
 ## Architecture
 
 ```
-[Raspberry Pi Pico]
-  Pin 0 (Phase A, 0°)   --> [RC Filter] --> [MOSFET Amp A] --> Relay CT input A
-  Pin 2 (Phase B, 120°) --> [RC Filter] --> [MOSFET Amp B] --> Relay CT input B
-  Pin 4 (Phase C, 240°) --> [RC Filter] --> [MOSFET Amp C] --> Relay CT input C
+[BeagleBone Black eHRPWM]
+  P9_22 (eHRPWM0A, Phase A, 0°)   --> [RC Filter] --> [X9C104] --> [MOSFET Amp A] --> Relay CT input A
+  P9_14 (eHRPWM1A, Phase B, 120°) --> [RC Filter] --> [X9C104] --> [MOSFET Amp B] --> Relay CT input B
+  P8_19 (eHRPWM2A, Phase C, 240°) --> [RC Filter] --> [X9C104] --> [MOSFET Amp C] --> Relay CT input C
 ```
 
-The Pico outputs 100kHz PWM on three pins. Each PWM duty cycle is updated every ~65µs
-from a 256-sample sine lookup table to produce 60Hz. RC filters remove the PWM carrier,
-leaving a clean 60Hz sine. MOSFET push-pull amplifiers (IRF540N + IRF9540N) drive up to
-10A into the relay current coil burden.
+The BBB outputs 100kHz PWM on three eHRPWM pins. Each PWM duty cycle is updated every
+~65µs from a 256-sample sine lookup table to produce 60Hz. RC filters remove the PWM
+carrier, leaving a clean 60Hz sine. MOSFET push-pull amplifiers (IRF540N + IRF9540N)
+drive up to 10A into the relay current coil burden.
 
 An X9C104 digital potentiometer on the signal path controls amplitude, allowing simulation
 of different fault current multiples (2×, 6×, 10× rated).
 
+## BeagleBone Black OS (microSD)
+
+Run Debian from a microSD card — no eMMC flashing required.
+
+1. Download the **non-flasher** microSD image from https://beagleboard.org/latest-images
+   (choose "AM335x 11.x (Bullseye) microSD" — filename should NOT contain `flasher`)
+2. Write to a 4GB+ microSD card using **Balena Etcher**
+3. Power off the BBB, insert the card
+4. **Hold the S2 button** (near the microSD slot) while applying power; release after ~5 seconds
+5. SSH in: `ssh debian@192.168.7.2` — password `temppwd`
+
+> S2 must be held on every boot to select the SD card over the eMMC.
+
+## Setup
+
+```bash
+# Copy files to BBB
+scp -r firmware/beaglebone_3phase/ debian@beaglebone.local:~/relay_test_set/
+
+# On the BBB (as root):
+sudo bash setup.sh
+
+# Run with real-time priority
+sudo chrt -f 50 python3 beaglebone_3phase.py
+```
+
+`setup.sh` installs `Adafruit_BBIO`, configures all three PWM pins via `config-pin`, and
+prints instructions for making pin configuration persistent across reboots.
+
+## Verification
+
+Probe P9\_22, P9\_14, and P8\_19 with an oscilloscope — you should see a 100kHz PWM
+carrier with a 60Hz sine envelope and 120° phase offsets between channels.
+Press Ctrl-C for clean shutdown.
+
 ## Files
 
 ```
-sketches/
-  pico_3phase/
-    pico_3phase.py      MicroPython signal generator (runs on Pico)
-  ad9833_single/
-    ad9833_single.ino   Legacy SPI/AD9833 sketch (superseded, kept for reference)
+firmware/
+  beaglebone_3phase/
+    beaglebone_3phase.py        Signal generator (CPython + Adafruit_BBIO)
+    setup.sh                    First-time setup (run as root)
 hardware/
-  bom.md                Bill of materials
-  amp_circuit.md        MOSFET amplifier circuit description and build notes
+  bom.md                        Bill of materials
+  amp_circuit.md                MOSFET amplifier circuit description and build notes
 datasheets/
   ad9833.pdf
   AD5290.pdf
   x9c104.pdf
 docs/
-  relay_test_set.org    Project TODO list
+  relay_test_set.org            Project TODO list
 ```
 
 ## Power Supply
