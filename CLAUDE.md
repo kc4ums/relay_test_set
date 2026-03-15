@@ -6,46 +6,45 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 3-phase secondary relay test set. Generates 60Hz sine waves (120° apart) to simulate motor inrush current for testing overcurrent relay CT inputs. Target output: up to 10A.
 
+## Platform
+
+**TI LAUNCHXL-F28069M** — TMS320F28069M, 90MHz C28x DSP. Bare-metal C, no OS.
+- **Toolchain:** TI Code Composer Studio (CCS) 12.x + C2000Ware 5.x
+- **Flash:** USB via XDS110 onboard debugger (CCS Run → Debug)
+
+### Why C2000 (not BeagleBone Black)
+
+BBB was abandoned due to: `Adafruit_BBIO` broken on Python 3.11+, `bb-cape-overlays`
+not in apt (requires source build), cape_universal/pinmux not loading on kernel 6.x,
+and Linux timing jitter unsuitable for deterministic PWM. C2000 ePWM is purpose-built
+for 3-phase power control with no OS overhead.
+
 ## Firmware Deployment
 
-Runs on BeagleBone Black (Debian 12 Bookworm, v5.10-ti kernel, console). Requires `Adafruit_BBIO` (installed into `/opt/relay_venv`) and `bb-cape-overlays`.
-
-1. Copy `firmware/beaglebone_3phase/` to the BBB (e.g. via `scp`)
-2. Run `sudo bash setup.sh` — installs deps and configures PWM pins
-3. Run the generator: `sudo chrt -f 50 /opt/relay_venv/bin/python3 beaglebone_3phase.py`
-4. Ctrl-C for clean shutdown (outputs return to 50% midpoint)
-
-### First-time BBB setup notes
-
-- **OS image:** BeagleBone Black Debian 12.12 2025-10-29 IoT (v5.10-ti) — use this exact image
-  - Download from https://www.beagleboard.org/distros
-  - Flash with Balena Etcher; hold S2 button on first boot to boot from SD
-  - Use v5.10-ti kernel — newer mainline kernels (6.x) break cape universal and PWM
-- `bb-cape-overlays` is available via apt on Bookworm with the BeagleBone repo
-- `Adafruit_BBIO` installs fine on Python 3.9 (shipped with Bookworm/v5.10-ti image)
-- `Adafruit_BBIO` is installed into a venv at `/opt/relay_venv` (PEP 668)
-- `.gitattributes` enforces LF line endings for `.sh`/`.py` — no CRLF issues after scp
-- Enable cape universal in `/boot/uEnv.txt`: uncomment `enable_uboot_cape_universal=1`
-
-`SCHED_FIFO` priority 50 (`chrt -f 50`) is required for acceptable timing jitter on a stock Debian kernel.
+1. Open CCS, create new C2000 project targeting TMS320F28069M
+2. Add `firmware/c2000_3phase/main.c` and `sine_lut.h` to the project
+3. Add C2000Ware device support files + linker `.cmd` (see `firmware/c2000_3phase/README.md`)
+4. Build (Ctrl+B), then Run → Debug to flash via USB
+5. See `firmware/c2000_3phase/README.md` for full CCS setup details
 
 ## Hardware Architecture
 
 Signal path (per channel, ×3):
-1. **BBB eHRPWM** (P9\_22/P9\_14/P8\_19, 100kHz carrier, 256-sample sine LUT) →
+1. **C2000 ePWM** (GPIO0/GPIO2/GPIO4, 100kHz carrier, 256-sample sine LUT) →
 2. **RC filter** (2-pole, 1kΩ+1kΩ, 2×100nF, ~1.6kHz cutoff) →
 3. **X9C104 digital pot** (amplitude control) →
 4. **LM358 buffer** →
 5. **MOSFET push-pull** (IRF540N + IRF9540N, Class AB, 24V rail) → relay CT input
 
-Power rails: +24V (Meanwell LRS-350-24) for MOSFET drains; +12V (7812 from 24V) for op-amps; +3.3V from BBB internal regulator.
+Power rails: +24V (Meanwell LRS-350-24) for MOSFET drains; +12V (7812 from 24V) for op-amps; +3.3V from LaunchPad internal regulator.
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
-| `firmware/beaglebone_3phase/beaglebone_3phase.py` | Active firmware (CPython + Adafruit_BBIO) |
-| `firmware/beaglebone_3phase/setup.sh` | BBB first-time setup script (run as root) |
+| `firmware/c2000_3phase/main.c` | Active firmware (bare-metal C, TMS320F28069M) |
+| `firmware/c2000_3phase/sine_lut.h` | 256-sample sine LUT (uint16_t, 0–450) |
+| `firmware/c2000_3phase/README.md` | CCS project setup and flashing instructions |
 | `hardware/schematic.txt` | Full ASCII schematic (one channel + power) |
 | `hardware/amp_circuit.md` | MOSFET amplifier design details |
 | `hardware/bom.md` | Bill of materials |
@@ -53,19 +52,18 @@ Power rails: +24V (Meanwell LRS-350-24) for MOSFET drains; +12V (7812 from 24V) 
 
 ## Firmware Notes
 
-- **`sine_lut`**: Precomputed 256-sample table, values 0.0–100.0% (Adafruit_BBIO duty cycle is percent)
-- **Phase offsets**: 0, 85, 170 samples (≈120° and 240° at 256 samples/cycle)
-- **PWM API**: `PWM.start(pin, duty, freq)` then `PWM.set_duty_cycle(pin, val)` per loop step
-- **Pins**: P9\_22 (eHRPWM0A, Phase A), P9\_14 (eHRPWM1A, Phase B), P8\_19 (eHRPWM2A, Phase C)
-  — one A-channel per eHRPWM module avoids shared-timebase conflicts
-- **Timing**: `time.perf_counter()` (monotonic float seconds); ~65µs/step; elapsed write time subtracted before sleep
-- **Shutdown**: SIGINT/SIGTERM handler sets all outputs to 50% midpoint, calls `PWM.cleanup()`
-- **Pre-shifted LUTs**: Per-phase pre-shifted arrays avoid per-loop modulo arithmetic
-- **Real-time priority**: Run with `sudo chrt -f 50` (SCHED\_FIFO) to reduce timing jitter
-- **X9C104 control** (not yet implemented): INC/U\_D/CS signals; 100 positions, NVM-capable
+- **`sine_lut`**: 256-sample table, uint16_t, values 0–450 (EPWM_PERIOD). Generated as `round((sin(2π·i/256)+1)·225)`
+- **Phase offsets**: 0, 85, 170 samples (≈0°, 120°, 240° at 256 samples/cycle)
+- **ePWM pins**: GPIO0 (ePWM1A, Phase A), GPIO2 (ePWM2A, Phase B), GPIO4 (ePWM3A, Phase C)
+- **Carrier**: 100kHz, up-down count, TBPRD=450 at 90MHz SYSCLK
+- **Sine update**: CPU Timer 0 ISR at 15,360Hz (= 256 × 60Hz); updates CMPA on ePWM1/2/3
+- **SYSCLK**: 90MHz (PLL ×18/÷2 from 10MHz XTAL on LaunchPad)
+- **No phase sync hardware**: software index offsets (0/85/170) maintain phase; no ePWM hardware phase register used
+- **X9C104 control** (not yet implemented): INC/U_D/CS signals; 100 positions, NVM-capable
 
 ## Design Constraints
 
 - The X9C104 sits *after* the RC filter on the pre-amplified signal — amplitude scaling happens on the clean sine, not the PWM
 - Class AB bias is set by a 10kΩ trim pot + 2× 1N4148 diodes; adjust for minimal crossover distortion at bench test
 - Star-ground topology: SGND (signal) and PGND (power) joined only at the Meanwell return
+- C2000Ware version: use 5.x; F28069 device support is under `device_support/f2806x/`

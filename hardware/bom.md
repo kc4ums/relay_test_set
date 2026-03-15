@@ -4,9 +4,16 @@
 
 | Qty | Part | Description |
 |-----|------|-------------|
-| 1 | Raspberry Pi Pico | Microcontroller, 3-phase PWM output |
-| 3 | 1kΩ resistor | RC low-pass filter (per channel) |
-| 3 | 100nF capacitor | RC low-pass filter (per channel) |
+| 1 | LAUNCHXL-F28069M | TI C2000 LaunchPad, 3-phase ePWM output (GPIO0/2/4) |
+
+## RC Input Filter (×3, one per phase — 2-pole per channel)
+
+| Qty | Part | Value | Purpose |
+|-----|------|-------|---------|
+| 6 | R | 1kΩ | RC low-pass filter (2 per channel) |
+| 6 | C | 100nF | RC low-pass filter (2 per channel) |
+
+Cutoff ≈ 1.6kHz per pole; two poles give ~40dB attenuation at 100kHz carrier.
 
 ## MOSFET Current Amplifier (×3, one per phase)
 
@@ -14,24 +21,25 @@
 |-----|------|-------------|---------|
 | 3 | Q1 | IRF540N | N-channel MOSFET, top switch, 100V 28A |
 | 3 | Q2 | IRF9540N | P-channel MOSFET, bottom switch, 100V 19A |
-| 6 | R_bias | 220Ω | Class AB quiescent bias resistors |
+| 6 | R_bias | 220Ω | Gate series resistors (Class AB bias network) |
 | 3 | R_bias trim | 10kΩ trim pot | Quiescent current adjustment |
 | 3 | R_sense | 0.05Ω 5W | Current sense (optional feedback) |
 | 3 | U1 | LM358 | Input buffer + bias driver |
-| 6 | D1, D2 | 1N4148 | Bias diodes for thermal tracking |
+| 6 | D1, D2 | 1N4148 | Bias diodes for Class AB thermal tracking |
 | 3 | — | TO-220 heat sink | Required for 10A+ dissipation |
 
 ## Amplitude Control
 
 | Qty | Part | Description |
 |-----|------|-------------|
-| 1 | X9C104 | Digital potentiometer, signal amplitude control |
+| 3 | X9C104 | Digital potentiometer, one per phase, independent CS lines |
 
 ## Power Supply
 
 | Qty | Part | Description |
 |-----|------|-------------|
 | 1 | Meanwell LRS-350-24 | 24V / 14.6A supply (shared across all 3 channels) |
+| 1 | 7812 | +12V linear regulator for op-amp rail (from 24V input) |
 
 ## Notes
 

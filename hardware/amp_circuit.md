@@ -29,7 +29,7 @@ INPUT (0–3.3V sine) ──[LM358 buffer]──+──[220Ω]──> Q1 Gate
 
 | Component | Role |
 |-----------|------|
-| LM358 op-amp | Buffers the 0–3.3V Pico signal; provides gate drive current |
+| LM358 op-amp | Buffers the 0–3.3V C2000 signal; provides gate drive current |
 | D1, D2 (1N4148) | Forward voltage drop creates gate-gate offset for Class AB bias |
 | Trim pot (10kΩ) | Adjusts quiescent current to minimize crossover distortion |
 | IRF540N | Sources current to load on positive half-cycle |
@@ -41,7 +41,7 @@ INPUT (0–3.3V sine) ──[LM358 buffer]──+──[220Ω]──> Q1 Gate
 
 - Supply: 24V single-rail (or ±12V split)
 - Output current: up to 10A continuous into 0.1–1Ω burden (relay CT secondary)
-- Signal input: 60Hz sine, 0–3.3V from Pico → RC filter
+- Signal input: 60Hz sine, 0–3.3V from C2000 LaunchPad → RC filter
 - Each MOSFET dissipates up to ~24W at 10A with 2.4V drop; use adequate heat sinking
 
 ## RC Input Filter (before amplifier input)
@@ -49,7 +49,7 @@ INPUT (0–3.3V sine) ──[LM358 buffer]──+──[220Ω]──> Q1 Gate
 Two-pole filter to remove 100kHz PWM carrier:
 
 ```
-Pico PWM ──[1kΩ]──+──[1kΩ]──+── to LM358 input
+C2000 PWM ──[1kΩ]──+──[1kΩ]──+── to LM358 input
                    |          |
                  [100nF]    [100nF]
                    |          |
@@ -61,12 +61,12 @@ Cutoff ≈ 1.6kHz (each pole). Two poles give ~40dB attenuation at 100kHz.
 ## Amplitude Control
 
 Insert an X9C104 digital potentiometer as a voltage divider between the RC filter output
-and the LM358 input. The Pico controls the X9C104 via its INC/U-D/CS pins to set the
+and the LM358 input. The C2000 controls the X9C104 via its INC/U-D/CS pins to set the
 simulated fault current level (e.g., 2×, 6×, or 10× relay rated current).
 
 ## Verification Steps
 
-1. Probe Pico pins 0, 2, 4 with oscilloscope — confirm 60Hz sine with 120° shifts.
+1. Probe LaunchPad GPIO0/GPIO2/GPIO4 (J4 pins 40/39/38) — confirm 60Hz sine envelope with 120° shifts.
 2. Probe after RC filter — confirm clean sine, no visible 100kHz ripple.
 3. Bench test amplifier into 1Ω 50W resistor; measure output current with clamp meter.
    Target: 10A peak sine.

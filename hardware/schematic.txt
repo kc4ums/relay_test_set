@@ -16,28 +16,32 @@ POWER SUPPLY
     GND
 
 
-RASPBERRY PI PICO — SIGNAL GENERATION
+LAUNCHXL-F28069M — SIGNAL GENERATION
 ======================================
 
-                    +3.3V (Pico internal)
+                    +3.3V (LaunchPad internal)
                        |
   ┌────────────────────────────────────────┐
-  │          RASPBERRY PI PICO             │
+  │         LAUNCHXL-F28069M              │
+  │       (TMS320F28069M, 90MHz)          │
   │                                        │
-  │  Pin 0 ── Phase A (0°)   PWM out ──────┼──> [Phase A RC Filter]
-  │  Pin 2 ── Phase B (120°) PWM out ──────┼──> [Phase B RC Filter]
-  │  Pin 4 ── Phase C (240°) PWM out ──────┼──> [Phase C RC Filter]
+  │  GPIO0 ── Phase A (0°)   PWM out ──────┼──> [Phase A RC Filter]
+  │  GPIO2 ── Phase B (120°) PWM out ──────┼──> [Phase B RC Filter]
+  │  GPIO4 ── Phase C (240°) PWM out ──────┼──> [Phase C RC Filter]
   │                                        │
-  │  Pin 6 ── X9C104 INC  ─────────────────┼──> X9C104 Pin 1
-  │  Pin 7 ── X9C104 U/D  ─────────────────┼──> X9C104 Pin 2
-  │  Pin 8 ── X9C104 CS   ─────────────────┼──> X9C104 Pin 8
+  │  GPIO6 ── X9C104 INC  ─────────────────┼──> X9C104 A/B/C Pin 1 (shared)
+  │  GPIO7 ── X9C104 U/D  ─────────────────┼──> X9C104 A/B/C Pin 2 (shared)
+  │  GPIO8 ── X9C104 CS_A ─────────────────┼──> X9C104 A Pin 8
+  │  GPIO9 ── X9C104 CS_B ─────────────────┼──> X9C104 B Pin 8
+  │  GPIO10 ── X9C104 CS_C ────────────────┼──> X9C104 C Pin 8
   │                                        │
   │  GND ──────────────────────────────────┼──> SGND (signal ground)
   └────────────────────────────────────────┘
 
-  NOTE: pico_3phase.py runs on the Pico.
+  NOTE: main.c (bare-metal C) runs on the F28069M.
         Phase B index offset = 85 samples (120°)
         Phase C index offset = 170 samples (240°)
+        X9C104 control (GPIO6/7/8-10) not yet implemented in firmware.
 
 
 RC LOW-PASS FILTER — PHASE A (replicate for B and C)
@@ -47,7 +51,7 @@ RC LOW-PASS FILTER — PHASE A (replicate for B and C)
         |
        [R1 1kΩ]
         |
-        +──────────────[R2 1kΩ]──────────────────> to X9C104 Vw (wiper in)
+        +──────────────[R2 1kΩ]──────────────────> to X9C104 Rl (pin 6)
         |                                  |
       [C1 100nF]                        [C2 100nF]
         |                                  |
@@ -58,29 +62,30 @@ RC LOW-PASS FILTER — PHASE A (replicate for B and C)
   Attenuation at 100kHz: ~40dB (two poles combined)
 
 
-X9C104 DIGITAL POTENTIOMETER — AMPLITUDE CONTROL (shared, one per channel)
-===========================================================================
+X9C104 DIGITAL POTENTIOMETER — AMPLITUDE CONTROL (one per channel)
+===================================================================
 
-                        +5V (or +3.3V)
+                        +3.3V
                             |
   ┌─────────────────────────────────────────────┐
   │                  X9C104                      │
   │                                              │
-  │  Pin 1 (INC)  ◄── Pico Pin 6                │
-  │  Pin 2 (U/D)  ◄── Pico Pin 7                │
+  │  Pin 1 (INC)  ◄── GPIO6                     │
+  │  Pin 2 (U/D)  ◄── GPIO7                     │
   │  Pin 3 (Vss)  ── SGND                        │
   │  Pin 4 (Vw)   ── wiper ──────────────────────┼──> to LM358 input
   │  Pin 5 (Rh)   ── [R3 1kΩ to SGND]           │    (voltage divider tap)
   │  Pin 6 (Rl)   ── RC filter output            │
-  │  Pin 7 (Vdd)  ── +5V                         │
-  │  Pin 8 (CS)   ◄── Pico Pin 8                 │
+  │  Pin 7 (Vdd)  ── +3.3V                       │
+  │  Pin 8 (CS)   ◄── GPIO8 (Ch A) / GPIO9 (Ch B) / GPIO10 (Ch C)
   └─────────────────────────────────────────────┘
 
   X9C104 acts as voltage divider:
     Rl = RC filter output (full signal)
     Rh = bottom of divider (to GND via R3)
     Vw = tapped output to amplifier input
-  Turn wiper up/down via Pico to set fault current level (2×, 6×, 10×, etc.)
+  INC/U-D are shared across all three X9C104s; CS_A/B/C are independent,
+  allowing per-channel amplitude control (2×, 6×, 10× fault current, etc.).
 
 
 LM358 INPUT BUFFER + BIAS DRIVER — PHASE A
@@ -164,14 +169,15 @@ HEAT SINK REQUIREMENT
 FULL SYSTEM — THREE PHASES
 ===========================
 
-  Pico Pin 0 ──[RC Filter A]──[X9C104 A]──[LM358 A]──[IRF540N/IRF9540N A]──> Relay CT A
-  Pico Pin 2 ──[RC Filter B]──[X9C104 B]──[LM358 B]──[IRF540N/IRF9540N B]──> Relay CT B
-  Pico Pin 4 ──[RC Filter C]──[X9C104 C]──[LM358 C]──[IRF540N/IRF9540N C]──> Relay CT C
-                                   |
-                         Pico Pins 6/7/8 (shared INC/UD/CS)
-                         (wire all three X9C104s to same Pico pins
-                          and use separate CS lines per channel if
-                          independent amplitude control is needed)
+  GPIO0 ──[RC Filter A]──[X9C104 A]──[LM358 A]──[IRF540N/IRF9540N A]──> Relay CT A
+  GPIO2 ──[RC Filter B]──[X9C104 B]──[LM358 B]──[IRF540N/IRF9540N B]──> Relay CT B
+  GPIO4 ──[RC Filter C]──[X9C104 C]──[LM358 C]──[IRF540N/IRF9540N C]──> Relay CT C
+                               |
+                    GPIO6 (INC) ── shared across all three X9C104s
+                    GPIO7 (U/D) ── shared across all three X9C104s
+                    GPIO8  (CS_A) ── X9C104 A only
+                    GPIO9  (CS_B) ── X9C104 B only
+                    GPIO10 (CS_C) ── X9C104 C only
 
   All SGND and PGND tied together at one star ground point.
   +24V, +12V rails shared across all three channels.
@@ -180,7 +186,7 @@ FULL SYSTEM — THREE PHASES
 GROUND NOTES
 =============
 
-  SGND (signal ground) — Pico GND, LM358 GND, X9C104 Vss, RC filter returns
+  SGND (signal ground) — LaunchPad GND, LM358 GND, X9C104 Vss, RC filter returns
   PGND (power ground)  — MOSFET source returns, relay coil return, supply GND
   Star ground: join SGND and PGND at a single point near the power supply to
   prevent high-current MOSFET switching from coupling noise into the signal path.
