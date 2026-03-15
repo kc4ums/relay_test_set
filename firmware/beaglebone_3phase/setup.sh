@@ -9,11 +9,16 @@ if [[ $EUID -ne 0 ]]; then
     exit 1
 fi
 
-# Check for config-pin (part of bb-cape-overlays / bone-universal-io)
+# Check for config-pin — bb-cape-overlays not in apt, build from source
 if ! command -v config-pin &>/dev/null; then
-    echo "config-pin not found — installing prerequisites..."
+    echo "config-pin not found — building bb.org-overlays from source..."
     apt-get update -q
-    apt-get install -y python3-pip python3-dev bb-cape-overlays
+    apt-get install -y build-essential device-tree-compiler git python3-dev
+    tmpdir=$(mktemp -d)
+    git clone --depth=1 https://github.com/beagleboard/bb.org-overlays "$tmpdir/bb.org-overlays"
+    make -C "$tmpdir/bb.org-overlays"
+    make -C "$tmpdir/bb.org-overlays" install
+    rm -rf "$tmpdir"
 fi
 
 # Install Adafruit_BBIO into a venv at /opt/relay_venv
