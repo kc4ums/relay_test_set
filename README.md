@@ -26,14 +26,12 @@ of different fault current multiples (2×, 6×, 10× rated).
 
 Run Debian from a microSD card — no eMMC flashing required.
 
-1. Download the **non-flasher** microSD image from https://beagleboard.org/latest-images
-   (choose "AM335x 11.x (Bullseye) microSD" — filename should NOT contain `flasher`)
+1. Download **BeagleBone Black Debian 12.12 2025-10-29 IoT (v5.10-ti)** from https://www.beagleboard.org/distros
+   — use the v5.10-ti kernel, NOT 6.x (6.x breaks PWM/cape support)
 2. Write to a 4GB+ microSD card using **Balena Etcher**
 3. Power off the BBB, insert the card
 4. **Hold the S2 button** (near the microSD slot) while applying power; release after ~5 seconds
 5. SSH in: `ssh debian@192.168.7.2` — password `temppwd`
-
-> S2 must be held on every boot to select the SD card over the eMMC.
 
 ## Setup
 
@@ -45,7 +43,7 @@ scp -r firmware/beaglebone_3phase/ debian@beaglebone.local:~/relay_test_set/
 sudo bash setup.sh
 
 # Run with real-time priority
-sudo chrt -f 50 python3 beaglebone_3phase.py
+sudo chrt -f 50 /opt/relay_venv/bin/python3 beaglebone_3phase.py
 ```
 
 `setup.sh` installs `Adafruit_BBIO`, configures all three PWM pins via `config-pin`, and
@@ -71,8 +69,6 @@ datasheets/
   ad9833.pdf
   AD5290.pdf
   x9c104.pdf
-docs/
-  relay_test_set.org            Project TODO list
 ```
 
 ## Power Supply
