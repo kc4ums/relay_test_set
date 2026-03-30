@@ -11,7 +11,8 @@
  * Phase offsets: 0, 85, 170 LUT samples (0°, 120°, 240°)
  *
  * SCI-A console: GPIO28=RX, GPIO29=TX, 9600-8-N-1 (USB backchannel via XDS100v2)
- * Commands: start | stop | amp <0.0-1.0> | decay <0.0-1.0> | status
+ * Commands: start | stop | amp <0.0-1.0> | decay <1-45> | accel <0-20>
+ *           phase <A|B|C> <on|off> | status
  *
  * Build: TI Code Composer Studio 12.x, C2000Ware 5.x, target F28069M.
  * Flash: USB (XDS110 onboard debugger on LaunchPad).
@@ -59,6 +60,8 @@ static volatile float g_accel        = 3.0f;     /* peak speed-up (0=off)   */
 static float          g_decay_secs   = 0.0f;     /* last decay setting in s */
 static volatile float amplitude      = INRUSH_PEAK;
 static volatile Uint16 g_running     = 0;         /* 1=running, 0=stopped   */
+static volatile Uint16 g_phase_mask  = 0x07;      /* bit0=A, bit1=B, bit2=C */
+static volatile float  g_phase_scale = 1.0f;      /* 1.0 normal, 1.732 single-phase */
 
 /* ── Console command buffer ─────────────────────────────────────────────── */
 #define CMD_BUF_LEN  32
@@ -113,7 +116,8 @@ void main(void)
     ERTM;   /* enable real-time debug   */
 
     scia_puts("\r\n3-Phase Relay Test Set — SCI Console\r\n");
-    scia_puts("Commands: start | stop | amp <0.0-1.0> | decay <1-45 sec> | accel <0-20> | status\r\n> ");
+    scia_puts("Commands: start | stop | amp <0.0-1.0> | decay <1-45> | accel <0-20>\r\n");
+    scia_puts("          phase <A|B|C> <on|off> | status\r\n> ");
 
     /* Poll SCI console — all waveform work done in timer0_isr */
     for (;;)
@@ -133,11 +137,22 @@ interrupt void timer0_isr(void)
     {
         float amp = amplitude;
         float ss  = g_steady_amp;
+        Uint16 mask = g_phase_mask;
 
-        /* Scale each channel: CMPA = 225 + (lut - 225) * amplitude */
-        EPwm1Regs.CMPA.half.CMPA = (Uint16)(half + (int16)(((int16)sine_lut[idx_a] - (int16)half) * amp));
-        EPwm2Regs.CMPA.half.CMPA = (Uint16)(half + (int16)(((int16)sine_lut[idx_b] - (int16)half) * amp));
-        EPwm3Regs.CMPA.half.CMPA = (Uint16)(half + (int16)(((int16)sine_lut[idx_c] - (int16)half) * amp));
+        /* Apply single-phase scale (√3 boost on remaining phases); clamp to 1.0 */
+        float eff = amp * g_phase_scale;
+        if (eff > 1.0f) eff = 1.0f;
+
+        /* Active channels use scaled amplitude; dropped phases hold at DC midpoint */
+        EPwm1Regs.CMPA.half.CMPA = (mask & 0x01)
+            ? (Uint16)(half + (int16)(((int16)sine_lut[idx_a] - (int16)half) * eff))
+            : half;
+        EPwm2Regs.CMPA.half.CMPA = (mask & 0x02)
+            ? (Uint16)(half + (int16)(((int16)sine_lut[idx_b] - (int16)half) * eff))
+            : half;
+        EPwm3Regs.CMPA.half.CMPA = (mask & 0x04)
+            ? (Uint16)(half + (int16)(((int16)sine_lut[idx_c] - (int16)half) * eff))
+            : half;
 
         /* Variable-rate decay: faster near peak, slower near steady state   */
         if (amp > ss)
@@ -323,6 +338,55 @@ static void console_poll(void)
                 scia_puts("Error: accel must be 0 to 20\r\n");
             }
         }
+        else if (strncmp(cmd_buf, "phase ", 6) == 0)
+        {
+            /* phase <A|B|C> <on|off> */
+            char ph  = cmd_buf[6];          /* 'A', 'B', or 'C' (case-insens) */
+            char *sp = cmd_buf + 7;         /* space + "on"/"off" */
+            Uint16 bit;
+
+            if (ph >= 'a' && ph <= 'z') ph -= 32;  /* to upper */
+
+            if      (ph == 'A') bit = 0x01;
+            else if (ph == 'B') bit = 0x02;
+            else if (ph == 'C') bit = 0x04;
+            else                bit = 0;
+
+            if (bit == 0 || *sp != ' ')
+            {
+                scia_puts("Usage: phase <A|B|C> <on|off>\r\n");
+            }
+            else
+            {
+                sp++;  /* skip space */
+                if (strcmp(sp, "on") == 0)
+                {
+                    g_phase_mask |= bit;
+                    scia_puts("Phase ");
+                    scia_putch((Uint16)ph);
+                    scia_puts(" enabled\r\n");
+                }
+                else if (strcmp(sp, "off") == 0)
+                {
+                    g_phase_mask &= ~bit;
+                    scia_puts("Phase ");
+                    scia_putch((Uint16)ph);
+                    scia_puts(" dropped (single-phase condition)\r\n");
+                }
+
+                /* Recalculate scale: 3 active=1.0, 2 active=1.732 (sqrt3), 1=1.0 */
+                if (strcmp(sp, "on") == 0 || strcmp(sp, "off") == 0)
+                {
+                    Uint16 m = g_phase_mask;
+                    Uint16 cnt = ((m>>0)&1) + ((m>>1)&1) + ((m>>2)&1);
+                    g_phase_scale = (cnt == 2) ? 1.732f : 1.0f;
+                }
+                else
+                {
+                    scia_puts("Usage: phase <A|B|C> <on|off>\r\n");
+                }
+            }
+        }
         else if (strcmp(cmd_buf, "status") == 0)
         {
             /* Use %d only — %f causes stack overflow on C2000 */
@@ -330,6 +394,19 @@ static void console_poll(void)
 
             scia_puts("State    : ");
             scia_puts(g_running ? "RUNNING\r\n" : "STOPPED\r\n");
+
+            /* phase mask + scale */
+            {
+                Uint16 m = g_phase_mask;
+                int sw = (int)g_phase_scale;
+                int sf = (int)((g_phase_scale - (float)sw) * 1000.0f + 0.5f);
+                sprintf(tmp, "phases   : A=%s B=%s C=%s  scale=%d.%03dx\r\n",
+                        (m & 0x01) ? "on " : "off",
+                        (m & 0x02) ? "on " : "off",
+                        (m & 0x04) ? "on " : "off",
+                        sw, sf);
+                scia_puts(tmp);
+            }
 
             /* amp (4 dp) */
             w = (int)g_steady_amp;
@@ -370,7 +447,8 @@ static void console_poll(void)
         }
         else if (cmd_buf[0] != '\0')
         {
-            scia_puts("Unknown. Try: start | stop | amp <f> | decay <s> | accel <n> | status\r\n");
+            scia_puts("Unknown. Try: start | stop | amp <f> | decay <s> | accel <n>\r\n");
+            scia_puts("             phase <A|B|C> <on|off> | status\r\n");
         }
 
         scia_puts("> ");
