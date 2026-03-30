@@ -1,0 +1,194 @@
+================================================================================
+  RELAY TEST SET — FULL SCHEMATIC (one channel shown; replicate for B and C)
+================================================================================
+
+POWER SUPPLY
+============
+
+  AC Mains
+     |
+  [Meanwell LRS-350-24]
+     |          |
+    +24V        GND ─────────────────────────────── PGND (power ground)
+     |
+    [7812]──────────────────────────────────────── +12V (logic/op-amp rail)
+     |
+    GND
+
+
+LAUNCHXL-F28069M — SIGNAL GENERATION
+======================================
+
+                    +3.3V (LaunchPad internal)
+                       |
+  ┌────────────────────────────────────────┐
+  │         LAUNCHXL-F28069M              │
+  │       (TMS320F28069M, 90MHz)          │
+  │                                        │
+  │  GPIO0 ── Phase A (0°)   PWM out ──────┼──> [Phase A RC Filter]
+  │  GPIO2 ── Phase B (120°) PWM out ──────┼──> [Phase B RC Filter]
+  │  GPIO4 ── Phase C (240°) PWM out ──────┼──> [Phase C RC Filter]
+  │                                        │
+  │  GPIO6 ── X9C104 INC  ─────────────────┼──> X9C104 A/B/C Pin 1 (shared)
+  │  GPIO7 ── X9C104 U/D  ─────────────────┼──> X9C104 A/B/C Pin 2 (shared)
+  │  GPIO8 ── X9C104 CS_A ─────────────────┼──> X9C104 A Pin 8
+  │  GPIO9 ── X9C104 CS_B ─────────────────┼──> X9C104 B Pin 8
+  │  GPIO10 ── X9C104 CS_C ────────────────┼──> X9C104 C Pin 8
+  │                                        │
+  │  GND ──────────────────────────────────┼──> SGND (signal ground)
+  └────────────────────────────────────────┘
+
+  NOTE: main.c (bare-metal C) runs on the F28069M.
+        Phase B index offset = 85 samples (120°)
+        Phase C index offset = 170 samples (240°)
+        X9C104 control (GPIO6/7/8-10) not yet implemented in firmware.
+
+
+RC LOW-PASS FILTER — PHASE A (replicate for B and C)
+=====================================================
+
+  100kHz PWM in (0–3.3V)
+        |
+       [R1 1kΩ]
+        |
+        +──────────────[R2 1kΩ]──────────────────> to X9C104 Rl (pin 6)
+        |                                  |
+      [C1 100nF]                        [C2 100nF]
+        |                                  |
+       SGND                              SGND
+
+  Pole 1: f = 1/(2π × 1kΩ × 100nF) ≈ 1.6kHz
+  Pole 2: f ≈ 1.6kHz
+  Attenuation at 100kHz: ~40dB (two poles combined)
+
+
+X9C104 DIGITAL POTENTIOMETER — AMPLITUDE CONTROL (one per channel)
+===================================================================
+
+                        +3.3V
+                            |
+  ┌─────────────────────────────────────────────┐
+  │                  X9C104                      │
+  │                                              │
+  │  Pin 1 (INC)  ◄── GPIO6                     │
+  │  Pin 2 (U/D)  ◄── GPIO7                     │
+  │  Pin 3 (Vss)  ── SGND                        │
+  │  Pin 4 (Vw)   ── wiper ──────────────────────┼──> to LM358 input
+  │  Pin 5 (Rh)   ── [R3 1kΩ to SGND]           │    (voltage divider tap)
+  │  Pin 6 (Rl)   ── RC filter output            │
+  │  Pin 7 (Vdd)  ── +3.3V                       │
+  │  Pin 8 (CS)   ◄── GPIO8 (Ch A) / GPIO9 (Ch B) / GPIO10 (Ch C)
+  └─────────────────────────────────────────────┘
+
+  X9C104 acts as voltage divider:
+    Rl = RC filter output (full signal)
+    Rh = bottom of divider (to GND via R3)
+    Vw = tapped output to amplifier input
+  INC/U-D are shared across all three X9C104s; CS_A/B/C are independent,
+  allowing per-channel amplitude control (2×, 6×, 10× fault current, etc.).
+
+
+LM358 INPUT BUFFER + BIAS DRIVER — PHASE A
+===========================================
+
+  Signal from X9C104 wiper
+        |
+        | (+) non-inverting input
+     [LM358 — U1A]                     +12V ──> Pin 8 (Vcc)
+        | output                        GND ──> Pin 4 (GND)
+        |
+        +──────────────────────────────────── feedback (unity gain)
+        |  (−) inverting input tied to output = voltage follower
+        |
+        +──────────[R4 220Ω]──────────────────────────────────> Q1 Gate (IRF540N)
+        |
+       [D1 1N4148]  (anode up)
+        |
+       [D2 1N4148]  (anode up)
+        |
+       [R5 trim pot 10kΩ] ── adjust quiescent current
+        |
+        +──────────[R6 220Ω]──────────────────────────────────> Q2 Gate (IRF9540N)
+        |
+       SGND
+
+  D1 + D2 forward drops (~1.2V total) set the Class AB gate-gate offset.
+  Trim pot fine-tunes quiescent current to eliminate crossover distortion.
+
+
+MOSFET PUSH-PULL OUTPUT STAGE — PHASE A
+========================================
+
+                    +24V (PGND)
+                       |
+                    [IRF540N — Q1]
+                    |G  |D  |S
+                    |   +24V |
+         R4 ───────>G        |S
+                             |
+                             +──────────────────────────────> OUTPUT Phase A
+                             |                                (to relay CT input A)
+         R6 ───────>G        |S
+                    |   GND  |
+                    |G  |D  |S
+                    [IRF9540N — Q2]
+                       |
+                      GND (PGND)
+
+
+CURRENT SENSE (OPTIONAL) — PHASE A
+====================================
+
+  OUTPUT Phase A
+        |
+      [R_sense 0.05Ω 5W]    ← insert in series with output lead
+        |
+      Relay CT Input A
+
+  Voltage across R_sense = I × 0.05Ω
+  At 10A: V = 0.5V  →  measure with DMM or feed back to op-amp for closed-loop control
+
+
+RELAY CT INPUT (load)
+======================
+
+  Relay CT Input A
+        |
+      [Relay CT secondary coil]  ~0.1–1Ω burden
+        |
+       PGND
+
+
+HEAT SINK REQUIREMENT
+======================
+
+  Q1 (IRF540N)  : P_diss = V_ds × I = ~2–4V × 10A = 20–40W  → TO-220 heat sink required
+  Q2 (IRF9540N) : same estimate                               → TO-220 heat sink required
+
+
+FULL SYSTEM — THREE PHASES
+===========================
+
+  GPIO0 ──[RC Filter A]──[X9C104 A]──[LM358 A]──[IRF540N/IRF9540N A]──> Relay CT A
+  GPIO2 ──[RC Filter B]──[X9C104 B]──[LM358 B]──[IRF540N/IRF9540N B]──> Relay CT B
+  GPIO4 ──[RC Filter C]──[X9C104 C]──[LM358 C]──[IRF540N/IRF9540N C]──> Relay CT C
+                               |
+                    GPIO6 (INC) ── shared across all three X9C104s
+                    GPIO7 (U/D) ── shared across all three X9C104s
+                    GPIO8  (CS_A) ── X9C104 A only
+                    GPIO9  (CS_B) ── X9C104 B only
+                    GPIO10 (CS_C) ── X9C104 C only
+
+  All SGND and PGND tied together at one star ground point.
+  +24V, +12V rails shared across all three channels.
+
+
+GROUND NOTES
+=============
+
+  SGND (signal ground) — LaunchPad GND, LM358 GND, X9C104 Vss, RC filter returns
+  PGND (power ground)  — MOSFET source returns, relay coil return, supply GND
+  Star ground: join SGND and PGND at a single point near the power supply to
+  prevent high-current MOSFET switching from coupling noise into the signal path.
+
+================================================================================
