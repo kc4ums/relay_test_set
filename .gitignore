@@ -1,0 +1,16 @@
+# CCS build output
+Debug/
+Release/
+
+# CCS generated files
+*.map
+*.out
+*.hex
+*_linkInfo.xml
+*.d
+*.d_raw
+*.obj
+
+# CCS IDE files
+.launches/
+.settings/
