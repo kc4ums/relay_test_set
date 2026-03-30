@@ -56,18 +56,28 @@ C2000 PWM ──[1kΩ]──+──[1kΩ]──+── to LM358 input
                   GND        GND
 ```
 
-Cutoff ≈ 1.6kHz (each pole). Two poles give ~40dB attenuation at 100kHz.
+Cutoff ≈ 1.6kHz (each pole). Two poles give ~40dB attenuation at 100kHz carrier.
 
 ## Amplitude Control
 
-Insert an X9C104 digital potentiometer as a voltage divider between the RC filter output
-and the LM358 input. The C2000 controls the X9C104 via its INC/U-D/CS pins to set the
-simulated fault current level (e.g., 2×, 6×, or 10× relay rated current).
+Amplitude is controlled entirely in firmware — the C2000 ISR scales each channel's
+PWM duty cycle in real time using the `g_steady_amp`, `g_decay_factor`, and
+`g_accel` parameters. These are set via the serial console (`amp`, `decay`, `accel`
+commands) without any hardware changes. No external digital potentiometer is used.
+
+The inrush profile (full-scale burst decaying to steady-state) is generated
+entirely within the firmware signal path:
+
+```
+  CMPA = 225 + (lut[i] − 225) × amplitude
+  amplitude decays each ISR tick: faster at peak, slower near steady state
+```
 
 ## Verification Steps
 
-1. Probe LaunchPad GPIO0/GPIO2/GPIO4 (J4 pins 40/39/38) — confirm 60Hz sine envelope with 120° shifts.
-2. Probe after RC filter — confirm clean sine, no visible 100kHz ripple.
-3. Bench test amplifier into 1Ω 50W resistor; measure output current with clamp meter.
-   Target: 10A peak sine.
-4. Connect to relay under test and observe trip characteristic vs. applied current.
+1. Probe LaunchPad GPIO0/GPIO2/GPIO4 — confirm 60Hz sine envelope with 120° phase shifts.
+2. Probe after RC filter — confirm clean 60Hz sine, no visible 100kHz ripple.
+3. Issue `start` on the serial console; observe amplitude decay on oscilloscope.
+4. Bench test amplifier into 1Ω 50W resistor; measure output current with clamp meter.
+   Target: 10A peak sine at `amp 1.0`.
+5. Connect to relay under test and observe trip characteristic vs. applied current.

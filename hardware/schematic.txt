@@ -29,11 +29,8 @@ LAUNCHXL-F28069M — SIGNAL GENERATION
   │  GPIO2 ── Phase B (120°) PWM out ──────┼──> [Phase B RC Filter]
   │  GPIO4 ── Phase C (240°) PWM out ──────┼──> [Phase C RC Filter]
   │                                        │
-  │  GPIO6 ── X9C104 INC  ─────────────────┼──> X9C104 A/B/C Pin 1 (shared)
-  │  GPIO7 ── X9C104 U/D  ─────────────────┼──> X9C104 A/B/C Pin 2 (shared)
-  │  GPIO8 ── X9C104 CS_A ─────────────────┼──> X9C104 A Pin 8
-  │  GPIO9 ── X9C104 CS_B ─────────────────┼──> X9C104 B Pin 8
-  │  GPIO10 ── X9C104 CS_C ────────────────┼──> X9C104 C Pin 8
+  │  GPIO28 (SCIRXDA) ◄── USB serial ──────┼──  SCI-A console RX
+  │  GPIO29 (SCITXDA) ──> USB serial ──────┼──  SCI-A console TX
   │                                        │
   │  GND ──────────────────────────────────┼──> SGND (signal ground)
   └────────────────────────────────────────┘
@@ -41,7 +38,7 @@ LAUNCHXL-F28069M — SIGNAL GENERATION
   NOTE: main.c (bare-metal C) runs on the F28069M.
         Phase B index offset = 85 samples (120°)
         Phase C index offset = 170 samples (240°)
-        X9C104 control (GPIO6/7/8-10) not yet implemented in firmware.
+        Serial console: 9600-8-N-1 via XDS100v2 backchannel UART
 
 
 RC LOW-PASS FILTER — PHASE A (replicate for B and C)
@@ -51,7 +48,7 @@ RC LOW-PASS FILTER — PHASE A (replicate for B and C)
         |
        [R1 1kΩ]
         |
-        +──────────────[R2 1kΩ]──────────────────> to X9C104 Rl (pin 6)
+        +──────────────[R2 1kΩ]──────────────────> to LM358 non-inverting input
         |                                  |
       [C1 100nF]                        [C2 100nF]
         |                                  |
@@ -60,38 +57,13 @@ RC LOW-PASS FILTER — PHASE A (replicate for B and C)
   Pole 1: f = 1/(2π × 1kΩ × 100nF) ≈ 1.6kHz
   Pole 2: f ≈ 1.6kHz
   Attenuation at 100kHz: ~40dB (two poles combined)
-
-
-X9C104 DIGITAL POTENTIOMETER — AMPLITUDE CONTROL (one per channel)
-===================================================================
-
-                        +3.3V
-                            |
-  ┌─────────────────────────────────────────────┐
-  │                  X9C104                      │
-  │                                              │
-  │  Pin 1 (INC)  ◄── GPIO6                     │
-  │  Pin 2 (U/D)  ◄── GPIO7                     │
-  │  Pin 3 (Vss)  ── SGND                        │
-  │  Pin 4 (Vw)   ── wiper ──────────────────────┼──> to LM358 input
-  │  Pin 5 (Rh)   ── [R3 1kΩ to SGND]           │    (voltage divider tap)
-  │  Pin 6 (Rl)   ── RC filter output            │
-  │  Pin 7 (Vdd)  ── +3.3V                       │
-  │  Pin 8 (CS)   ◄── GPIO8 (Ch A) / GPIO9 (Ch B) / GPIO10 (Ch C)
-  └─────────────────────────────────────────────┘
-
-  X9C104 acts as voltage divider:
-    Rl = RC filter output (full signal)
-    Rh = bottom of divider (to GND via R3)
-    Vw = tapped output to amplifier input
-  INC/U-D are shared across all three X9C104s; CS_A/B/C are independent,
-  allowing per-channel amplitude control (2×, 6×, 10× fault current, etc.).
+  Output: clean 60Hz sine, 0–3.3V amplitude set by firmware PWM duty cycle
 
 
 LM358 INPUT BUFFER + BIAS DRIVER — PHASE A
 ===========================================
 
-  Signal from X9C104 wiper
+  Signal from RC filter output
         |
         | (+) non-inverting input
      [LM358 — U1A]                     +12V ──> Pin 8 (Vcc)
@@ -114,6 +86,9 @@ LM358 INPUT BUFFER + BIAS DRIVER — PHASE A
 
   D1 + D2 forward drops (~1.2V total) set the Class AB gate-gate offset.
   Trim pot fine-tunes quiescent current to eliminate crossover distortion.
+
+  Amplitude is controlled entirely in firmware — the C2000 ISR scales PWM duty
+  cycle in real time. Use the serial console to adjust amp, decay, and accel.
 
 
 MOSFET PUSH-PULL OUTPUT STAGE — PHASE A
@@ -169,15 +144,14 @@ HEAT SINK REQUIREMENT
 FULL SYSTEM — THREE PHASES
 ===========================
 
-  GPIO0 ──[RC Filter A]──[X9C104 A]──[LM358 A]──[IRF540N/IRF9540N A]──> Relay CT A
-  GPIO2 ──[RC Filter B]──[X9C104 B]──[LM358 B]──[IRF540N/IRF9540N B]──> Relay CT B
-  GPIO4 ──[RC Filter C]──[X9C104 C]──[LM358 C]──[IRF540N/IRF9540N C]──> Relay CT C
-                               |
-                    GPIO6 (INC) ── shared across all three X9C104s
-                    GPIO7 (U/D) ── shared across all three X9C104s
-                    GPIO8  (CS_A) ── X9C104 A only
-                    GPIO9  (CS_B) ── X9C104 B only
-                    GPIO10 (CS_C) ── X9C104 C only
+  GPIO0 ──[RC Filter A]──[LM358 A]──[IRF540N/IRF9540N A]──> Relay CT A
+  GPIO2 ──[RC Filter B]──[LM358 B]──[IRF540N/IRF9540N B]──> Relay CT B
+  GPIO4 ──[RC Filter C]──[LM358 C]──[IRF540N/IRF9540N C]──> Relay CT C
+
+  GPIO28 (SCIRXDA) ◄──┐
+  GPIO29 (SCITXDA) ──>├── USB serial console (XDS100v2 backchannel)
+                       │   9600-8-N-1; commands: start, stop, amp, decay, accel, status
+                       └── Amplitude and inrush profile set entirely in firmware
 
   All SGND and PGND tied together at one star ground point.
   +24V, +12V rails shared across all three channels.
@@ -186,7 +160,7 @@ FULL SYSTEM — THREE PHASES
 GROUND NOTES
 =============
 
-  SGND (signal ground) — LaunchPad GND, LM358 GND, X9C104 Vss, RC filter returns
+  SGND (signal ground) — LaunchPad GND, LM358 GND, RC filter returns
   PGND (power ground)  — MOSFET source returns, relay coil return, supply GND
   Star ground: join SGND and PGND at a single point near the power supply to
   prevent high-current MOSFET switching from coupling noise into the signal path.

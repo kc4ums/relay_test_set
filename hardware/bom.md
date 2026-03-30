@@ -4,7 +4,7 @@
 
 | Qty | Part | Description |
 |-----|------|-------------|
-| 1 | LAUNCHXL-F28069M | TI C2000 LaunchPad, 3-phase ePWM output (GPIO0/2/4) |
+| 1 | LAUNCHXL-F28069M | TI C2000 LaunchPad, 3-phase ePWM output (GPIO0/2/4), SCI-A console (GPIO28/29) |
 
 ## RC Input Filter (×3, one per phase — 2-pole per channel)
 
@@ -28,12 +28,6 @@ Cutoff ≈ 1.6kHz per pole; two poles give ~40dB attenuation at 100kHz carrier.
 | 6 | D1, D2 | 1N4148 | Bias diodes for Class AB thermal tracking |
 | 3 | — | TO-220 heat sink | Required for 10A+ dissipation |
 
-## Amplitude Control
-
-| Qty | Part | Description |
-|-----|------|-------------|
-| 3 | X9C104 | Digital potentiometer, one per phase, independent CS lines |
-
 ## Power Supply
 
 | Qty | Part | Description |
@@ -43,7 +37,9 @@ Cutoff ≈ 1.6kHz per pole; two poles give ~40dB attenuation at 100kHz carrier.
 
 ## Notes
 
-- For relay CT secondaries rated at 5A (needing 30–50A fault simulation), add a 1:5 or 1:10
-  step-up current transformer on each channel output.
-- A ±12V split supply may be substituted for the 24V single-rail to improve output symmetry
-  and eliminate the need for an output coupling capacitor.
+- Amplitude, inrush profile, and decay are controlled entirely in firmware via
+  the serial console. No external digital potentiometer is required.
+- For relay CT secondaries rated at 5A (needing 30–50A fault simulation), add a 1:5
+  or 1:10 step-up current transformer on each channel output.
+- A ±12V split supply may be substituted for the 24V single-rail to improve output
+  symmetry and eliminate the need for an output coupling capacitor.
