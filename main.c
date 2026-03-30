@@ -61,6 +61,7 @@ static float          g_decay_secs   = 0.0f;     /* last decay setting in s */
 static volatile float amplitude      = INRUSH_PEAK;
 static volatile Uint16 g_running     = 0;         /* 1=running, 0=stopped   */
 static volatile Uint16 g_phase_mask  = 0x07;      /* bit0=A, bit1=B, bit2=C */
+static volatile float  g_phase_scale = 1.0f;      /* 1.0 normal, 1.732 single-phase */
 
 /* ── Console command buffer ─────────────────────────────────────────────── */
 #define CMD_BUF_LEN  32
@@ -138,15 +139,19 @@ interrupt void timer0_isr(void)
         float ss  = g_steady_amp;
         Uint16 mask = g_phase_mask;
 
-        /* Scale each active channel; dropped phases hold at DC midpoint */
+        /* Apply single-phase scale (√3 boost on remaining phases); clamp to 1.0 */
+        float eff = amp * g_phase_scale;
+        if (eff > 1.0f) eff = 1.0f;
+
+        /* Active channels use scaled amplitude; dropped phases hold at DC midpoint */
         EPwm1Regs.CMPA.half.CMPA = (mask & 0x01)
-            ? (Uint16)(half + (int16)(((int16)sine_lut[idx_a] - (int16)half) * amp))
+            ? (Uint16)(half + (int16)(((int16)sine_lut[idx_a] - (int16)half) * eff))
             : half;
         EPwm2Regs.CMPA.half.CMPA = (mask & 0x02)
-            ? (Uint16)(half + (int16)(((int16)sine_lut[idx_b] - (int16)half) * amp))
+            ? (Uint16)(half + (int16)(((int16)sine_lut[idx_b] - (int16)half) * eff))
             : half;
         EPwm3Regs.CMPA.half.CMPA = (mask & 0x04)
-            ? (Uint16)(half + (int16)(((int16)sine_lut[idx_c] - (int16)half) * amp))
+            ? (Uint16)(half + (int16)(((int16)sine_lut[idx_c] - (int16)half) * eff))
             : half;
 
         /* Variable-rate decay: faster near peak, slower near steady state   */
@@ -368,6 +373,14 @@ static void console_poll(void)
                     scia_putch((Uint16)ph);
                     scia_puts(" dropped (single-phase condition)\r\n");
                 }
+
+                /* Recalculate scale: 3 active=1.0, 2 active=1.732 (sqrt3), 1=1.0 */
+                if (strcmp(sp, "on") == 0 || strcmp(sp, "off") == 0)
+                {
+                    Uint16 m = g_phase_mask;
+                    Uint16 cnt = ((m>>0)&1) + ((m>>1)&1) + ((m>>2)&1);
+                    g_phase_scale = (cnt == 2) ? 1.732f : 1.0f;
+                }
                 else
                 {
                     scia_puts("Usage: phase <A|B|C> <on|off>\r\n");
@@ -382,13 +395,16 @@ static void console_poll(void)
             scia_puts("State    : ");
             scia_puts(g_running ? "RUNNING\r\n" : "STOPPED\r\n");
 
-            /* phase mask */
+            /* phase mask + scale */
             {
                 Uint16 m = g_phase_mask;
-                sprintf(tmp, "phases   : A=%s B=%s C=%s\r\n",
+                int sw = (int)g_phase_scale;
+                int sf = (int)((g_phase_scale - (float)sw) * 1000.0f + 0.5f);
+                sprintf(tmp, "phases   : A=%s B=%s C=%s  scale=%d.%03dx\r\n",
                         (m & 0x01) ? "on " : "off",
                         (m & 0x02) ? "on " : "off",
-                        (m & 0x04) ? "on " : "off");
+                        (m & 0x04) ? "on " : "off",
+                        sw, sf);
                 scia_puts(tmp);
             }
 
