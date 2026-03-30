@@ -14,3 +14,11 @@ Release/
 # CCS IDE files
 .launches/
 .settings/
+.ccsproject
+.clangd
+.theia/
+.mcp.json
+
+# Claude Code files
+CLAUDE.md
+.claude/
